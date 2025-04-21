@@ -5,6 +5,23 @@ import json
 import time
 from pathlib import Path
 import sys
+from ApplicationServices import (
+    AXIsProcessTrustedWithOptions,
+)
+from CoreFoundation import (
+    CFStringCreateWithCString,
+    CFDictionaryCreate,
+    kCFStringEncodingUTF8,
+    kCFBooleanTrue,
+)
+
+def check_accessibility_permissions():
+    """Check if the app has accessibility permissions."""
+    try:
+        return AXIsProcessTrustedWithOptions(None)
+    except Exception as e:
+        print(f"Error checking accessibility permissions: {e}")
+        return False
 
 def get_app_data_path():
     """Get the application data directory path."""
@@ -20,6 +37,13 @@ class MousePlayer:
         self.recording_file = get_app_data_path() / "recording.json"
 
     def play_recording(self, repeat_count=1):
+        # Check accessibility permissions first
+        if not check_accessibility_permissions():
+            error_msg = "RecMouse needs accessibility permissions to control the mouse. Please grant access in System Settings > Privacy & Security > Accessibility"
+            print(f"Error: {error_msg}")  # Debug logging
+            rumps.notification("Permission Required", "Accessibility Permission Needed", error_msg)
+            return False
+
         if not self.recording_file.exists():
             error_msg = f"No recording found at {self.recording_file}"
             print(f"Error: {error_msg}")  # Debug logging
@@ -52,24 +76,28 @@ class MousePlayer:
                 last_event_time = 0
 
                 for event in events:
-                    # Wait for the appropriate time
-                    current_time = time.time() - start_time
-                    wait_time = event['time'] - last_event_time
-                    if wait_time > 0:
-                        time.sleep(wait_time)
+                    try:
+                        # Wait for the appropriate time
+                        current_time = time.time() - start_time
+                        wait_time = event['time'] - last_event_time
+                        if wait_time > 0:
+                            time.sleep(wait_time)
 
-                    # Execute the event
-                    if event['type'] == 'move':
-                        self.mouse.position = (event['x'], event['y'])
-                    elif event['type'] == 'click':
-                        self.mouse.position = (event['x'], event['y'])
-                        button = Button.left if 'left' in event['button'].lower() else Button.right
-                        if event['pressed']:
-                            self.mouse.press(button)
-                        else:
-                            self.mouse.release(button)
+                        # Execute the event
+                        if event['type'] == 'move':
+                            self.mouse.position = (event['x'], event['y'])
+                        elif event['type'] == 'click':
+                            self.mouse.position = (event['x'], event['y'])
+                            button = Button.left if 'left' in event['button'].lower() else Button.right
+                            if event['pressed']:
+                                self.mouse.press(button)
+                            else:
+                                self.mouse.release(button)
 
-                    last_event_time = event['time']
+                        last_event_time = event['time']
+                    except Exception as e:
+                        print(f"Error during event playback: {str(e)}, event: {event}")  # More detailed error logging
+                        continue  # Try to continue with next event
                 
                 # Add a small delay between repetitions
                 if repeat_count > 1 and i < repeat_count - 1:
