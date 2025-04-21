@@ -13,12 +13,31 @@ from CoreFoundation import (
     CFDictionaryCreate,
     kCFStringEncodingUTF8,
     kCFBooleanTrue,
+    kCFTypeDictionaryKeyCallBacks,
+    kCFTypeDictionaryValueCallBacks,
 )
 
-def check_accessibility_permissions():
-    """Check if the app has accessibility permissions."""
+def check_accessibility_permissions(prompt=True):
+    """Check if the app has accessibility permissions.
+    
+    Args:
+        prompt (bool): If True, show the system permission dialog if needed
+    """
     try:
-        return AXIsProcessTrustedWithOptions(None)
+        if prompt:
+            # Create options dictionary to show prompt
+            options_key = CFStringCreateWithCString(None, b"AXTrustedCheckOptionPrompt", kCFStringEncodingUTF8)
+            options = CFDictionaryCreate(
+                None,
+                (options_key,),
+                (kCFBooleanTrue,),
+                1,
+                kCFTypeDictionaryKeyCallBacks,
+                kCFTypeDictionaryValueCallBacks,
+            )
+            return AXIsProcessTrustedWithOptions(options)
+        else:
+            return AXIsProcessTrustedWithOptions(None)
     except Exception as e:
         print(f"Error checking accessibility permissions: {e}")
         return False
@@ -37,40 +56,32 @@ class MousePlayer:
         self.recording_file = get_app_data_path() / "recording.json"
 
     def play_recording(self, repeat_count=1):
-        # Check accessibility permissions first
-        if not check_accessibility_permissions():
-            error_msg = "RecMouse needs accessibility permissions to control the mouse. Please grant access in System Settings > Privacy & Security > Accessibility"
-            print(f"Error: {error_msg}")  # Debug logging
-            rumps.notification("Permission Required", "Accessibility Permission Needed", error_msg)
-            return False
-
+        print("Starting play_recording...")  # Debug log
+        
         if not self.recording_file.exists():
-            error_msg = f"No recording found at {self.recording_file}"
-            print(f"Error: {error_msg}")  # Debug logging
-            rumps.notification("Error", "No Recording", error_msg)
-            return False
+            print(f"Recording file not found at: {self.recording_file}")  # Debug log
+            return False, "No recording found. Please record something first."
 
         try:
+            print(f"Reading recording file: {self.recording_file}")  # Debug log
             with open(self.recording_file, 'r') as f:
                 events = json.load(f)
+                print(f"Successfully loaded {len(events)} events")  # Debug log
         except json.JSONDecodeError as e:
-            error_msg = f"Invalid recording format: {str(e)}"
-            print(f"Error: {error_msg}")  # Debug logging
-            rumps.notification("Error", "Invalid Recording", error_msg)
-            return False
+            print(f"Failed to parse recording file: {e}")  # Debug log
+            return False, "The recording file is corrupted or invalid."
         except Exception as e:
-            error_msg = f"Failed to read recording: {str(e)}"
-            print(f"Error: {error_msg}")  # Debug logging
-            rumps.notification("Error", "Read Error", error_msg)
-            return False
+            print(f"Error reading recording file: {e}")  # Debug log
+            return False, f"Failed to read recording: {str(e)}"
 
         if not events:
-            rumps.notification("Error", "Empty Recording", "Please record something.")
-            return False
+            print("No events found in recording")  # Debug log
+            return False, "The recording is empty. Please record something first."
 
         try:
             print(f"Starting playback of {len(events)} events")  # Debug logging
             for i in range(repeat_count):
+                print(f"Starting playback iteration {i+1}/{repeat_count}")  # Debug log
                 # Get the initial time
                 start_time = time.time()
                 last_event_time = 0
@@ -85,8 +96,10 @@ class MousePlayer:
 
                         # Execute the event
                         if event['type'] == 'move':
+                            print(f"Moving mouse to {event['x']}, {event['y']}")  # Debug log
                             self.mouse.position = (event['x'], event['y'])
                         elif event['type'] == 'click':
+                            print(f"Click event at {event['x']}, {event['y']}, button: {event['button']}, pressed: {event['pressed']}")  # Debug log
                             self.mouse.position = (event['x'], event['y'])
                             button = Button.left if 'left' in event['button'].lower() else Button.right
                             if event['pressed']:
@@ -99,18 +112,18 @@ class MousePlayer:
                         print(f"Error during event playback: {str(e)}, event: {event}")  # More detailed error logging
                         continue  # Try to continue with next event
                 
+                print(f"Completed iteration {i+1}/{repeat_count}")  # Debug log
                 # Add a small delay between repetitions
                 if repeat_count > 1 and i < repeat_count - 1:
                     time.sleep(0.5)
 
             print("Playback completed successfully")  # Debug logging
-            return True
+            return True, None
 
         except Exception as e:
             error_msg = f"Playback error: {str(e)}"
             print(f"Error: {error_msg}")  # Debug logging
-            rumps.notification("Error", "Playback Error", error_msg)
-            return False
+            return False, error_msg
 
 if __name__ == "__main__":
     player = MousePlayer()
