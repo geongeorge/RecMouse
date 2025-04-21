@@ -1,24 +1,43 @@
+import os
 from pynput.mouse import Button, Controller
 import rumps
 import json
 import time
 from pathlib import Path
+import sys
+
+def get_app_data_path():
+    """Get the application data directory path."""
+    # Use Application Support on macOS
+    app_support = Path.home() / "Library" / "Application Support" / "RecMouse"
+    app_support.mkdir(parents=True, exist_ok=True)
+    return app_support
 
 class MousePlayer:
     def __init__(self):
         self.mouse = Controller()
-        self.recording_file = Path("recording.json")
+        # Use Application Support directory for storing recordings
+        self.recording_file = get_app_data_path() / "recording.json"
 
     def play_recording(self, repeat_count=1):
         if not self.recording_file.exists():
-            rumps.notification("Error", "No Recording", "Please record something first.")
+            error_msg = f"No recording found at {self.recording_file}"
+            print(f"Error: {error_msg}")  # Debug logging
+            rumps.notification("Error", "No Recording", error_msg)
             return False
 
         try:
             with open(self.recording_file, 'r') as f:
                 events = json.load(f)
-        except json.JSONDecodeError:
-            rumps.notification("Error", "Invalid Recording", "Please record again.")
+        except json.JSONDecodeError as e:
+            error_msg = f"Invalid recording format: {str(e)}"
+            print(f"Error: {error_msg}")  # Debug logging
+            rumps.notification("Error", "Invalid Recording", error_msg)
+            return False
+        except Exception as e:
+            error_msg = f"Failed to read recording: {str(e)}"
+            print(f"Error: {error_msg}")  # Debug logging
+            rumps.notification("Error", "Read Error", error_msg)
             return False
 
         if not events:
@@ -26,6 +45,7 @@ class MousePlayer:
             return False
 
         try:
+            print(f"Starting playback of {len(events)} events")  # Debug logging
             for i in range(repeat_count):
                 # Get the initial time
                 start_time = time.time()
@@ -55,10 +75,13 @@ class MousePlayer:
                 if repeat_count > 1 and i < repeat_count - 1:
                     time.sleep(0.5)
 
+            print("Playback completed successfully")  # Debug logging
             return True
 
         except Exception as e:
-            rumps.notification("Error", "Playback Error", str(e))
+            error_msg = f"Playback error: {str(e)}"
+            print(f"Error: {error_msg}")  # Debug logging
+            rumps.notification("Error", "Playback Error", error_msg)
             return False
 
 if __name__ == "__main__":
