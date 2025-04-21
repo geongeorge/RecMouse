@@ -61,6 +61,26 @@ class MouseRecorder:
         }
         self.recording.append(event)
 
+    def remove_last_click(self):
+        # Remove the last click events (both press and release) from recording
+        if not self.recording:
+            return
+            
+        # Remove events from the end until we've removed both press and release of the last click
+        removed_press = False
+        removed_release = False
+        while self.recording and not (removed_press and removed_release):
+            if self.recording[-1]['type'] == 'click':
+                if self.recording[-1]['pressed'] and not removed_press:
+                    self.recording.pop()
+                    removed_press = True
+                elif not self.recording[-1]['pressed'] and not removed_release:
+                    self.recording.pop()
+                    removed_release = True
+            else:
+                # Keep removing move events until we find click events
+                self.recording.pop()
+
     def start_recording(self):
         self.recording = []
         self.start_time = time()
