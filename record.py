@@ -2,6 +2,9 @@ from pynput import mouse, keyboard
 from time import time, sleep
 import logging
 from colorama import Fore, Style, init
+import threading
+import sys
+import rumps
 
 # Initialize colorama
 init()
@@ -13,13 +16,43 @@ logging.basicConfig(
     datefmt='%H:%M:%S'
 )
 
-class MouseRecorder:
+class StatusBarApp(rumps.App):
     def __init__(self):
+        super().__init__("◉", quit_button=None)  # Using a circle character as the title
+        self.recording = False
+        self.recorder = None
+        self.menu = ["Stop Recording", "Quit"]
+        self.menu["Stop Recording"].state = False
+
+    @rumps.clicked("Stop Recording")
+    def toggle_recording(self, _):
+        if self.recorder:
+            self.recorder.toggle_recording_from_menu()
+
+    @rumps.clicked("Quit")
+    def quit(self, _):
+        if self.recorder:
+            self.recorder.cleanup()
+        rumps.quit_application()
+
+    def set_recording(self, is_recording):
+        self.recording = is_recording
+        if is_recording:
+            self.title = "⚫ REC"  # Red circle when recording
+            self.menu["Stop Recording"].state = True
+        else:
+            self.title = "◉"  # Regular circle when not recording
+            self.menu["Stop Recording"].state = False
+
+class MouseRecorder:
+    def __init__(self, status_app):
         self.recording = False
         self.last_time = None
         self.recorded_events = []
         self.mouse_listener = mouse.Listener(on_click=self.on_click)
         self.keyboard_listener = keyboard.Listener(on_press=self.on_press)
+        self.status_app = status_app
+        self.status_app.recorder = self
 
     def on_click(self, x, y, button, pressed):
         if not self.recording or not pressed:
@@ -36,19 +69,24 @@ class MouseRecorder:
 
     def on_press(self, key):
         try:
-            # Use Ctrl+Alt+R as the toggle shortcut
             if key == keyboard.Key.f6:
                 self.toggle_recording()
         except AttributeError:
             pass
+
+    def toggle_recording_from_menu(self):
+        # Called from the menu item
+        self.toggle_recording()
 
     def toggle_recording(self):
         self.recording = not self.recording
         if self.recording:
             self.recorded_events = []
             self.last_time = time()
+            self.status_app.set_recording(True)
             logging.info(f"{Fore.YELLOW}Recording started! Press F6 to stop recording.{Style.RESET_ALL}")
         else:
+            self.status_app.set_recording(False)
             if self.recorded_events:
                 self.save_recording()
                 logging.info(f"{Fore.CYAN}Recording saved to record.txt!{Style.RESET_ALL}")
@@ -60,16 +98,22 @@ class MouseRecorder:
             for event in self.recorded_events:
                 f.write(event + "\n")
 
+    def cleanup(self):
+        if self.recording:
+            self.toggle_recording()
+        self.mouse_listener.stop()
+        self.keyboard_listener.stop()
+
     def start(self):
         self.mouse_listener.start()
         self.keyboard_listener.start()
         logging.info(f"{Fore.YELLOW}Mouse Recorder started! Press F6 to start/stop recording.{Style.RESET_ALL}")
-        self.mouse_listener.join()
-        self.keyboard_listener.join()
+
+def main():
+    status_app = StatusBarApp()
+    recorder = MouseRecorder(status_app)
+    recorder.start()
+    status_app.run()
 
 if __name__ == "__main__":
-    recorder = MouseRecorder()
-    try:
-        recorder.start()
-    except KeyboardInterrupt:
-        logging.info(f"{Fore.RED}Recording terminated by user.{Style.RESET_ALL}") 
+    main() 
