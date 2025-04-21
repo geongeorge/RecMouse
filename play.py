@@ -5,6 +5,9 @@ import logging
 from colorama import Fore, Style, init
 import sys
 import threading
+import json
+import time
+from pathlib import Path
 
 # Initialize colorama
 init()
@@ -22,6 +25,7 @@ class MousePlayer:
         self.ready_to_play = False
         self.keyboard_listener = keyboard.Listener(on_press=self.on_press)
         self.keyboard_listener.start()
+        self.recording_file = Path("recording.json")
 
     def on_press(self, key):
         try:
@@ -30,62 +34,46 @@ class MousePlayer:
         except AttributeError:
             pass
 
-    def play_recording(self, filename="record.txt"):
-        try:
-            with open(filename, "r") as f:
-                commands = f.readlines()
-        except FileNotFoundError:
-            logging.error(f"{Fore.RED}Could not find {filename}. Please record some actions first.{Style.RESET_ALL}")
+    def play_recording(self):
+        if not self.recording_file.exists():
+            print("No recording found!")
             return
 
-        logging.info(f"{Fore.YELLOW}Press F6 to start playback...{Style.RESET_ALL}")
-        
-        # Wait for F6 press
-        while not self.ready_to_play:
-            sleep(0.1)
-        
-        logging.info(f"{Fore.YELLOW}Starting playback in 3 seconds...{Style.RESET_ALL}")
-        sleep(3)  # Give user time to prepare
+        with open(self.recording_file, 'r') as f:
+            events = json.load(f)
 
-        for command in commands:
-            command = command.strip()
-            if not command:
-                continue
+        if not events:
+            print("Recording is empty!")
+            return
 
-            parts = command.split()
-            action = parts[0]
+        # Get the initial time
+        start_time = time.time()
+        last_event_time = 0
 
-            if action == "CLICK":
-                try:
-                    x, y = map(int, parts[1].split(","))
-                    logging.info(f"{Fore.CYAN}Clicking at position ({x}, {y}){Style.RESET_ALL}")
-                    self.mouse.position = (x, y)
-                    self.mouse.click(Button.left)
-                except (ValueError, IndexError):
-                    logging.error(f"{Fore.RED}Invalid CLICK command: {command}{Style.RESET_ALL}")
+        for event in events:
+            # Wait for the appropriate time
+            current_time = time.time() - start_time
+            wait_time = event['time'] - last_event_time
+            if wait_time > 0:
+                time.sleep(wait_time)
 
-            elif action == "WAIT":
-                try:
-                    ms = int(parts[1])
-                    seconds = ms / 1000
-                    logging.info(f"{Fore.MAGENTA}Waiting for {seconds:.2f} seconds{Style.RESET_ALL}")
-                    sleep(seconds)
-                except (ValueError, IndexError):
-                    logging.error(f"{Fore.RED}Invalid WAIT command: {command}{Style.RESET_ALL}")
+            # Execute the event
+            if event['type'] == 'move':
+                self.mouse.position = (event['x'], event['y'])
+            elif event['type'] == 'click':
+                self.mouse.position = (event['x'], event['y'])
+                button = Button.left if 'left' in event['button'].lower() else Button.right
+                if event['pressed']:
+                    self.mouse.press(button)
+                else:
+                    self.mouse.release(button)
 
-            else:
-                logging.warning(f"{Fore.RED}Unknown command: {command}{Style.RESET_ALL}")
-
-        logging.info(f"{Fore.GREEN}Playback completed!{Style.RESET_ALL}")
-        self.keyboard_listener.stop()
+            last_event_time = event['time']
 
 if __name__ == "__main__":
     player = MousePlayer()
-    filename = "record.txt"
-    if len(sys.argv) > 1:
-        filename = sys.argv[1]
     try:
-        player.play_recording(filename)
+        player.play_recording()
     except KeyboardInterrupt:
         logging.info(f"{Fore.RED}Playback terminated by user.{Style.RESET_ALL}")
         player.keyboard_listener.stop() 
