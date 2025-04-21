@@ -1,5 +1,7 @@
 # RecMouse
 
+<img src="/mouse-icon.png" width="200" />
+
 A macOS application that records and replays mouse movements and clicks.
 
 ## Features
