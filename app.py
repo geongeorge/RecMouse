@@ -124,9 +124,9 @@ class AutoMouseApp(rumps.App):
 
     def show_about(self, sender):
         window = rumps.Window(
-            message="RecMouse lets you record and replay mouse movements.",
-            title="About PyAutoMouse",
-            default_text="Version 1.0\nCreated with ❤️",
+            message="RecMouse lets you record and replay mouse movements.\nVersion 1.0\nCreated with ❤️\nhttps://www.recmouse.com",
+            title="About RecMouse",
+            default_text="Currently RecMouse only supports clicks. Other gestures are not supported",
             ok="Close"
         )
         NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
