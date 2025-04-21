@@ -135,12 +135,13 @@ class AutoMouseApp(rumps.App):
 
     def show_about(self, sender):
         window = rumps.Window(
-            message="RecMouse lets you record and replay mouse movements.\nVersion 1.0\nCreated with ❤️\nhttps://www.recmouse.com",
-            title="About RecMouse",
+            message="RecMouse lets you record and replay mouse movements.\nVersion 1.0\nCreated with ❤️\n\nrecmouse.com",
+            title="About RecMouse", 
             default_text="Currently RecMouse only supports clicks. Other gestures are not supported",
             ok="Close"
         )
         NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
+        window.icon = "mouse-icon.png"  # Set window icon to the app icon
         window.run()
 
     @rumps.clicked
