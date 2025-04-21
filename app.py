@@ -1,24 +1,32 @@
 import rumps
-from record import MouseRecorder, StatusBarApp
+from record import MouseRecorder, StatusBarApp, setup_logging
 from play import MousePlayer, check_accessibility_permissions
 import threading
 from AppKit import NSApplication
 import os
 import sys
 from pathlib import Path
+import logging
 
 def get_resource_path(filename):
     """Get the correct path for a resource file, whether running from source or in a bundle."""
     if getattr(sys, 'frozen', False):
         # Running in a bundle
         bundle_dir = Path(os.path.dirname(sys.executable)).parent / 'Resources'
+        logging.info(f"Running from bundle, resource path: {bundle_dir}")
         return str(bundle_dir / filename)
     else:
         # Running from source
-        return str(Path(__file__).parent / filename)
+        source_path = Path(__file__).parent / filename
+        logging.info(f"Running from source, resource path: {source_path}")
+        return str(source_path)
 
 class AutoMouseApp(rumps.App):
     def __init__(self):
+        # Set up logging first
+        setup_logging()
+        logging.info("Initializing AutoMouseApp")
+        
         icon_path = get_resource_path('mouse-status-icon.png')
         super().__init__("", icon=icon_path)  # Empty title initially, will be set based on state
         
@@ -45,10 +53,12 @@ class AutoMouseApp(rumps.App):
         
         # Initially disable play buttons if no recording exists
         self.update_play_buttons()
+        logging.info("AutoMouseApp initialization complete")
 
     def update_play_buttons(self):
         """Enable/disable play buttons based on recording existence."""
         has_recording = self.player.recording_file.exists()
+        logging.info(f"Updating play buttons, recording exists: {has_recording}")
         self.play_button.set_callback(self.play_recording if has_recording else None)
         self.repeat_play_button.set_callback(self.repeat_play if has_recording else None)
 
@@ -77,7 +87,9 @@ class AutoMouseApp(rumps.App):
 
     def check_permissions(self):
         """Check if we have accessibility permissions."""
+        logging.info("Checking accessibility permissions")
         if not check_accessibility_permissions(prompt=True):
+            logging.warning("Accessibility permissions not granted")
             rumps.alert(
                 "Permission Required",
                 "RecMouse needs accessibility permissions.\n\n" +
@@ -87,10 +99,12 @@ class AutoMouseApp(rumps.App):
                 "4. Try again"
             )
             return False
+        logging.info("Accessibility permissions granted")
         return True
 
     def toggle_recording(self, sender=None):
         if not self.status_app.is_recording:
+            logging.info("Starting recording")
             # Check permissions before starting recording
             if not self.check_permissions():
                 return
@@ -99,6 +113,7 @@ class AutoMouseApp(rumps.App):
             self.record_button.title = "Stop Recording"
             self.recorder.start_recording()
         else:
+            logging.info("Stopping recording")
             # Remove the last click event before stopping
             self.recorder.remove_last_click()
             self.title = ""  # Remove indicator when not recording
@@ -109,38 +124,36 @@ class AutoMouseApp(rumps.App):
 
     def reset_ui_state(self, _=None):
         """Reset the UI state after playback."""
-        print("Executing UI state reset")  # Debug log
+        logging.info("Resetting UI state")
         
         def do_reset():
-            print("Resetting UI state")  # Debug log
             self.is_playing = False
             self.title = ""  # Clear the play icon
             has_recording = self.player.recording_file.exists()
             if has_recording:
                 self.play_button.set_callback(self.play_recording)
                 self.repeat_play_button.set_callback(self.repeat_play)
-            print("UI state reset complete")  # Debug log
+            logging.info("UI state reset complete")
 
         # Direct call since this works reliably
         do_reset()
 
     def play_recording(self, _=None):
-        print("Play button clicked")  # Debug log
+        logging.info("Play button clicked")
         
         if self.is_playing:
-            print("Already playing, ignoring click")  # Debug log
+            logging.info("Already playing, ignoring click")
             return
             
         if not self.check_permissions():
-            print("Permission check failed")  # Debug log
             return
             
         if not self.player.recording_file.exists():
-            print("No recording file exists")  # Debug log
+            logging.warning("No recording file exists")
             rumps.alert("Error", "Please record something first.")
             return
 
-        print("Starting playback process")  # Debug log
+        logging.info("Starting playback process")
         # Disable play buttons during playback
         self.is_playing = True
         self.play_button.set_callback(None)
@@ -151,13 +164,13 @@ class AutoMouseApp(rumps.App):
         
         def play_thread():
             try:
-                print("Play thread started")  # Debug log
+                logging.info("Play thread started")
                 success, error_msg = self.player.play_recording()
-                print(f"Playback completed - success: {success}, error: {error_msg}")  # Debug log
+                logging.info(f"Playback completed - success: {success}, error: {error_msg}")
                 
                 if not success and error_msg:
                     def show_error():
-                        print("Showing error")  # Debug log
+                        logging.error(f"Playback error: {error_msg}")
                         rumps.alert("Error", error_msg)
                         self.reset_ui_state()
                     self.schedule_ui_update(show_error)
@@ -165,15 +178,14 @@ class AutoMouseApp(rumps.App):
                     self.reset_ui_state()
 
             except Exception as e:
-                print(f"Exception in play thread: {e}")  # Debug log
+                logging.error(f"Exception in play thread: {e}", exc_info=True)
                 def show_error():
-                    print("Showing error after exception")  # Debug log
                     rumps.alert("Playback Error", str(e))
                     self.reset_ui_state()
                 self.schedule_ui_update(show_error)
         
         # Start playback in a background thread
-        print("Starting background thread for playback")  # Debug log
+        logging.info("Starting background thread for playback")
         threading.Thread(target=play_thread).start()
 
     def repeat_play(self, _=None):

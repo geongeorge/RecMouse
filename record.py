@@ -19,43 +19,91 @@ def get_app_data_path():
     app_support.mkdir(parents=True, exist_ok=True)
     return app_support
 
+def setup_logging():
+    """Configure logging to write to both file and console."""
+    app_data = get_app_data_path()
+    log_file = app_data / "recmouse.log"
+    
+    # Delete old log file if it exists
+    try:
+        if log_file.exists():
+            log_file.unlink()
+            logging.info(f"Deleted old log file")
+    except Exception as e:
+        print(f"Error deleting old log file: {e}")
+    
+    # Create a formatter that includes timestamps
+    formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s')
+    
+    # Set up file handler
+    file_handler = logging.FileHandler(log_file)
+    file_handler.setFormatter(formatter)
+    
+    # Set up console handler with color
+    console_handler = logging.StreamHandler()
+    console_handler.setFormatter(formatter)
+    
+    # Configure root logger
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.DEBUG)
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+    
+    logging.info(f"Logging initialized. Log file: {log_file}")
+    logging.info(f"App data directory: {app_data}")
+
 # Configure logging
-logging.basicConfig(
-    level=logging.INFO,
-    format=f'{Fore.GREEN}%(asctime)s{Style.RESET_ALL} - %(message)s',
-    datefmt='%H:%M:%S'
-)
+setup_logging()
 
 class StatusBarApp:
     def __init__(self):
         self.recorder = None
         self.is_recording = False
+        logging.info("StatusBarApp initialized")
 
     def set_recording(self, is_recording):
         self.is_recording = is_recording
+        logging.info(f"Recording state changed to: {is_recording}")
 
 class MouseRecorder:
     def __init__(self, status_app):
-        self.recording = []
-        self.start_time = None
-        self.mouse_listener = None
-        # Use Application Support directory for storing recordings
-        self.recording_file = get_app_data_path() / "recording.json"
-        self.status_app = status_app
-        self.status_app.recorder = self
-        print(f"Recording file path: {self.recording_file}")  # Debug logging
+        try:
+            self.recording = []
+            self.start_time = None
+            self.mouse_listener = None
+            self.last_move_time = 0  # For throttling move events
+            self.move_throttle = 0.016  # ~60fps, adjust if needed
+            # Use Application Support directory for storing recordings
+            self.recording_file = get_app_data_path() / "recording.json"
+            self.status_app = status_app
+            self.status_app.recorder = self
+            logging.info(f"MouseRecorder initialized")
+            logging.info(f"Recording file path: {self.recording_file}")
+            logging.info(f"Recording file exists: {self.recording_file.exists()}")
+            if self.recording_file.exists():
+                logging.info(f"Recording file permissions: {oct(self.recording_file.stat().st_mode)}")
+        except Exception as e:
+            logging.error(f"Error in MouseRecorder initialization: {e}", exc_info=True)
+            raise
 
     def on_move(self, x, y):
         if self.start_time is None:
             return
         
+        current_time = time() - self.start_time
+        # Throttle movement events
+        if current_time - self.last_move_time < self.move_throttle:
+            return
+            
         event = {
             'type': 'move',
             'x': x,
             'y': y,
-            'time': time() - self.start_time
+            'time': current_time
         }
         self.recording.append(event)
+        self.last_move_time = current_time
+        logging.debug(f"Recorded move: {event}")  # Use debug level for move events
 
     def on_click(self, x, y, button, pressed):
         if self.start_time is None:
@@ -70,42 +118,7 @@ class MouseRecorder:
             'time': time() - self.start_time
         }
         self.recording.append(event)
-        print(f"Recorded click: {event}")  # Debug logging
-
-    def remove_last_click(self):
-        # Remove the last click events (both press and release) from recording
-        if not self.recording:
-            return
-            
-        # Remove events from the end until we've removed both press and release of the last click
-        removed_press = False
-        removed_release = False
-        while self.recording and not (removed_press and removed_release):
-            if self.recording[-1]['type'] == 'click':
-                if self.recording[-1]['pressed'] and not removed_press:
-                    self.recording.pop()
-                    removed_press = True
-                elif not self.recording[-1]['pressed'] and not removed_release:
-                    self.recording.pop()
-                    removed_release = True
-            else:
-                # Keep removing move events until we find click events
-                self.recording.pop()
-        
-        # Also remove the last 2 seconds of events
-        self.remove_last_seconds(2)
-
-    def remove_last_seconds(self, seconds):
-        if not self.recording:
-            return
-            
-        # Get the time of the last event
-        last_time = self.recording[-1]['time']
-        cutoff_time = last_time - seconds
-        
-        # Remove all events in the last 'seconds' seconds
-        while self.recording and self.recording[-1]['time'] > cutoff_time:
-            self.recording.pop()
+        logging.info(f"Recorded click: {event}")
 
     def start_recording(self):
         try:
@@ -117,11 +130,10 @@ class MouseRecorder:
             )
             self.mouse_listener.start()
             self.status_app.set_recording(True)
-            print("Recording started successfully")  # Debug logging
-            logging.info(f"{Fore.YELLOW}Recording started!{Style.RESET_ALL}")
+            logging.info("Recording started successfully")
         except Exception as e:
             error_msg = f"Failed to start recording: {str(e)}"
-            print(f"Error: {error_msg}")  # Debug logging
+            logging.error(error_msg, exc_info=True)
             rumps.notification("Error", "Recording Error", error_msg)
 
     def stop_recording(self):
@@ -132,29 +144,76 @@ class MouseRecorder:
                 self.start_time = None
                 
                 # Save recording to file
-                print(f"Saving recording to: {self.recording_file}")  # Debug logging
-                print(f"Number of events: {len(self.recording)}")  # Debug logging
+                logging.info(f"Saving recording to: {self.recording_file}")
+                logging.info(f"Number of events: {len(self.recording)}")
+                logging.info(f"Current working directory: {os.getcwd()}")
                 
                 # Ensure directory exists
                 self.recording_file.parent.mkdir(parents=True, exist_ok=True)
                 
-                with open(self.recording_file, 'w') as f:
-                    json.dump(self.recording, f)
+                try:
+                    with open(self.recording_file, 'w') as f:
+                        json.dump(self.recording, f)
+                    logging.info("Successfully saved recording")
+                    logging.info(f"File size after save: {self.recording_file.stat().st_size} bytes")
+                except Exception as e:
+                    logging.error(f"Error writing to recording file: {e}", exc_info=True)
+                    raise
+                    
                 self.status_app.set_recording(False)
-                logging.info(f"{Fore.CYAN}Recording saved to {self.recording_file}!{Style.RESET_ALL}")
+                logging.info(f"Recording saved to {self.recording_file}")
             except Exception as e:
                 error_msg = f"Failed to save recording: {str(e)}"
-                print(f"Error: {error_msg}")  # Debug logging
+                logging.error(error_msg, exc_info=True)
                 rumps.notification("Error", "Save Error", error_msg)
 
-    def toggle_recording(self):
-        if self.status_app.is_recording:
-            self.stop_recording()
-        else:
-            self.start_recording()
+    def remove_last_seconds(self, seconds):
+        if not self.recording:
+            return
+            
+        # Get the time of the last event
+        last_time = self.recording[-1]['time']
+        cutoff_time = last_time - seconds
+        
+        # Find the index where we should cut
+        cut_index = len(self.recording)
+        for i in range(len(self.recording) - 1, -1, -1):
+            if self.recording[i]['time'] <= cutoff_time:
+                cut_index = i + 1
+                break
+        
+        # Remove events only after the cutoff time
+        self.recording = self.recording[:cut_index]
+        logging.info(f"Removed events from last {seconds} seconds, remaining events: {len(self.recording)}")
 
-    def cleanup(self):
-        self.stop_recording()
+    def remove_last_click(self):
+        """Remove the last click events (both press and release) from recording."""
+        if not self.recording:
+            return
+            
+        # Find the last click events
+        last_press_index = -1
+        last_release_index = -1
+        
+        for i in range(len(self.recording) - 1, -1, -1):
+            event = self.recording[i]
+            if event['type'] == 'click':
+                if event['pressed'] and last_press_index == -1:
+                    last_press_index = i
+                elif not event['pressed'] and last_release_index == -1:
+                    last_release_index = i
+                if last_press_index != -1 and last_release_index != -1:
+                    break
+        
+        # If we found both press and release, remove them and any moves in between
+        if last_press_index != -1 and last_release_index != -1:
+            start_index = min(last_press_index, last_release_index)
+            end_index = max(last_press_index, last_release_index)
+            del self.recording[start_index:end_index + 1]
+            logging.info(f"Removed last click events, remaining events: {len(self.recording)}")
+        
+        # Also remove the last 2 seconds of events
+        self.remove_last_seconds(2)
 
 def main():
     status_app = StatusBarApp()
