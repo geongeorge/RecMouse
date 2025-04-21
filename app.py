@@ -19,8 +19,8 @@ def get_resource_path(filename):
 
 class AutoMouseApp(rumps.App):
     def __init__(self):
-        icon_path = get_resource_path('mouse-status-icon.png')  # Use status bar specific icon
-        super().__init__("RecMouse", icon=icon_path)
+        icon_path = get_resource_path('mouse-status-icon.png')
+        super().__init__("", icon=icon_path)  # Empty title initially, will be set based on state
         
         self.status_app = StatusBarApp()
         self.recorder = MouseRecorder(self.status_app)
@@ -46,13 +46,13 @@ class AutoMouseApp(rumps.App):
 
     def toggle_recording(self, sender=None):
         if not self.status_app.is_recording:
-            self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
+            self.title = "🔴"  # Red circle for recording
             self.record_button.title = "Stop Recording"
             self.recorder.start_recording()
         else:
             # Remove the last click event before stopping
             self.recorder.remove_last_click()
-            self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
+            self.title = ""  # Remove indicator when not recording
             self.record_button.title = "Start Recording"
             self.recorder.stop_recording()
             # Update play buttons state after recording
@@ -69,16 +69,16 @@ class AutoMouseApp(rumps.App):
         
         def play_thread():
             try:
-                self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
+                self.title = "▶️"  # Play emoji during playback
                 success = self.player.play_recording()
                 
-                # Restore icon and re-enable buttons
-                self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
+                # Restore state and re-enable buttons
+                self.title = "🔴" if self.status_app.is_recording else ""  # Restore recording indicator if recording
                 self.play_button.set_callback(self.play_recording)
                 self.repeat_play_button.set_callback(self.repeat_play)
             except Exception as e:
                 rumps.notification("Error", "Playback Error", str(e))
-                self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
+                self.title = "🔴" if self.status_app.is_recording else ""  # Restore recording indicator if recording
                 self.play_button.set_callback(self.play_recording)
                 self.repeat_play_button.set_callback(self.repeat_play)
         
@@ -111,18 +111,18 @@ class AutoMouseApp(rumps.App):
                     def play_thread():
                         try:
                             for i in range(repeat_count):
-                                self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
+                                self.title = f"▶️ [{i+1}/{repeat_count}]"  # Play emoji with count
                                 success = self.player.play_recording()
                                 if not success:  # If playback was interrupted
                                     break
                             
-                            # Restore icon and re-enable buttons
-                            self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
+                            # Restore state and re-enable buttons
+                            self.title = "🔴" if self.status_app.is_recording else ""  # Restore recording indicator if recording
                             self.play_button.set_callback(self.play_recording)
                             self.repeat_play_button.set_callback(self.repeat_play)
                         except Exception as e:
                             rumps.notification("Error", "Playback Error", str(e))
-                            self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
+                            self.title = "🔴" if self.status_app.is_recording else ""  # Restore recording indicator if recording
                             self.play_button.set_callback(self.play_recording)
                             self.repeat_play_button.set_callback(self.repeat_play)
                     

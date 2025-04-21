@@ -2,6 +2,7 @@ from setuptools import setup
 import subprocess
 import sys
 import os
+from pathlib import Path
 
 # Run make_icns.py to generate fresh icons
 print("Generating icons...")
@@ -12,11 +13,16 @@ except subprocess.CalledProcessError as e:
 except FileNotFoundError:
     print("Warning: make_icns.py not found, skipping icon generation")
 
+# Verify icon files exist
+required_files = ['RecMouse.icns', 'mouse-icon.png', 'mouse-status-icon.png']
+for file in required_files:
+    if not Path(file).exists():
+        print(f"Warning: Required file {file} not found!")
+
 APP = ['app.py']
 DATA_FILES = [
     ('', ['RecMouse.icns']),
-    ('', ['mouse-icon.png']),
-    ('', ['mouse-status-icon.png']),
+    ('Resources', ['mouse-icon.png', 'mouse-status-icon.png']),  # Put icons in Resources directory
 ]
 OPTIONS = {
     'argv_emulation': False,
