@@ -22,7 +22,7 @@ for file in required_files:
 APP = ['app.py']
 DATA_FILES = [
     ('', ['RecMouse.icns']),
-    ('Resources', ['mouse-icon.png', 'mouse-status-icon.png']),  # Put icons in Resources directory
+    ('', ['mouse-icon.png', 'mouse-status-icon.png']),  # Put icons in the same directory as the app
 ]
 OPTIONS = {
     'argv_emulation': False,

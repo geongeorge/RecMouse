@@ -62,6 +62,12 @@ python make_icns.py
 rm -rf build dist && python setup.py py2app
 ```
 
+6. Make DMG
+
+```bash
+chmod +x make_dmg.py && python make_dmg.py
+```
+
 The built application will be available at `dist/RecMouse.app`.
 
 ## Installation
