@@ -3,10 +3,24 @@ from record import MouseRecorder, StatusBarApp
 from play import MousePlayer
 import threading
 from AppKit import NSApplication
+import os
+import sys
+from pathlib import Path
+
+def get_resource_path(filename):
+    """Get the correct path for a resource file, whether running from source or in a bundle."""
+    if getattr(sys, 'frozen', False):
+        # Running in a bundle
+        bundle_dir = Path(os.path.dirname(sys.executable)).parent / 'Resources'
+        return str(bundle_dir / filename)
+    else:
+        # Running from source
+        return str(Path(__file__).parent / filename)
 
 class AutoMouseApp(rumps.App):
     def __init__(self):
-        super().__init__("🐭")  # Back to mouse emoji
+        icon_path = get_resource_path('mouse-status-icon.png')  # Use status bar specific icon
+        super().__init__("RecMouse", icon=icon_path)
         
         self.status_app = StatusBarApp()
         self.recorder = MouseRecorder(self.status_app)
@@ -32,13 +46,13 @@ class AutoMouseApp(rumps.App):
 
     def toggle_recording(self, sender=None):
         if not self.status_app.is_recording:
-            self.title = "🔴"  # Red dot for recording
+            self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
             self.record_button.title = "Stop Recording"
             self.recorder.start_recording()
         else:
             # Remove the last click event before stopping
             self.recorder.remove_last_click()
-            self.title = "🐭"  # Back to mouse emoji
+            self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
             self.record_button.title = "Start Recording"
             self.recorder.stop_recording()
             # Update play buttons state after recording
@@ -55,16 +69,16 @@ class AutoMouseApp(rumps.App):
         
         def play_thread():
             try:
-                self.title = "🐭 ▶️"
+                self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
                 success = self.player.play_recording()
                 
-                # Restore mouse icon and re-enable buttons
-                self.title = "🐭"
+                # Restore icon and re-enable buttons
+                self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
                 self.play_button.set_callback(self.play_recording)
                 self.repeat_play_button.set_callback(self.repeat_play)
             except Exception as e:
                 rumps.notification("Error", "Playback Error", str(e))
-                self.title = "🐭"
+                self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
                 self.play_button.set_callback(self.play_recording)
                 self.repeat_play_button.set_callback(self.repeat_play)
         
@@ -94,24 +108,21 @@ class AutoMouseApp(rumps.App):
                     self.play_button.set_callback(None)
                     self.repeat_play_button.set_callback(None)
                     
-                    # Store original title to restore later
-                    original_title = self.title
-                    
                     def play_thread():
                         try:
                             for i in range(repeat_count):
-                                self.title = f"🐭 ▶️ [{i+1}/{repeat_count}]"
+                                self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
                                 success = self.player.play_recording()
                                 if not success:  # If playback was interrupted
                                     break
                             
-                            # Restore mouse icon and re-enable buttons
-                            self.title = "🐭"
+                            # Restore icon and re-enable buttons
+                            self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
                             self.play_button.set_callback(self.play_recording)
                             self.repeat_play_button.set_callback(self.repeat_play)
                         except Exception as e:
                             rumps.notification("Error", "Playback Error", str(e))
-                            self.title = "🐭"
+                            self.icon = get_resource_path('mouse-status-icon.png')  # Use status bar icon
                             self.play_button.set_callback(self.play_recording)
                             self.repeat_play_button.set_callback(self.repeat_play)
                     

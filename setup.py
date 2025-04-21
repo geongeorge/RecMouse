@@ -1,8 +1,22 @@
 from setuptools import setup
+import subprocess
+import sys
+import os
+
+# Run make_icns.py to generate fresh icons
+print("Generating icons...")
+try:
+    subprocess.run([sys.executable, 'make_icns.py'], check=True)
+except subprocess.CalledProcessError as e:
+    print(f"Warning: Failed to generate icons: {e}")
+except FileNotFoundError:
+    print("Warning: make_icns.py not found, skipping icon generation")
 
 APP = ['app.py']
 DATA_FILES = [
     ('', ['RecMouse.icns']),
+    ('', ['mouse-icon.png']),
+    ('', ['mouse-status-icon.png']),
 ]
 OPTIONS = {
     'argv_emulation': False,
