@@ -2,6 +2,7 @@ import rumps
 from record import MouseRecorder, StatusBarApp
 from play import MousePlayer
 import threading
+from AppKit import NSApplication
 
 class AutoMouseApp(rumps.App):
     def __init__(self):
@@ -19,6 +20,15 @@ class AutoMouseApp(rumps.App):
         
         # Add items to menu (no need for quit, rumps adds it automatically)
         self.menu = [self.record_button, self.play_button, self.repeat_play_button, None, self.about_button]
+        
+        # Initially disable play buttons if no recording exists
+        self.update_play_buttons()
+
+    def update_play_buttons(self):
+        # Enable/disable play buttons based on recording existence
+        has_recording = self.player.recording_file.exists()
+        self.play_button.set_callback(self.play_recording if has_recording else None)
+        self.repeat_play_button.set_callback(self.repeat_play if has_recording else None)
 
     def toggle_recording(self, sender=None):
         if not self.status_app.is_recording:
@@ -31,8 +41,14 @@ class AutoMouseApp(rumps.App):
             self.title = "🐭"  # Back to mouse emoji
             self.record_button.title = "Start Recording"
             self.recorder.stop_recording()
+            # Update play buttons state after recording
+            self.update_play_buttons()
 
     def play_recording(self, sender):
+        if not self.player.recording_file.exists():
+            rumps.notification("Error", "No Recording", "Please record something first.")
+            return
+
         # Disable play buttons during playback
         self.play_button.set_callback(None)
         self.repeat_play_button.set_callback(None)
@@ -56,6 +72,10 @@ class AutoMouseApp(rumps.App):
         threading.Thread(target=play_thread).start()
 
     def repeat_play(self, sender):
+        if not self.player.recording_file.exists():
+            rumps.notification("Error", "No Recording", "Please record something first.")
+            return
+
         window = rumps.Window(
             message="Enter number of times to repeat:",
             title="Repeat Play",
@@ -64,6 +84,7 @@ class AutoMouseApp(rumps.App):
             ok="Play",
             cancel="Cancel"
         )
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         response = window.run()
         if response.clicked:
             try:
@@ -103,24 +124,20 @@ class AutoMouseApp(rumps.App):
 
     def show_about(self, sender):
         window = rumps.Window(
-            message="PyAutoMouse lets you record and replay mouse movements.",
+            message="RecMouse lets you record and replay mouse movements.",
             title="About PyAutoMouse",
             default_text="Version 1.0\nCreated with ❤️",
             ok="Close"
         )
+        NSApplication.sharedApplication().activateIgnoringOtherApps_(True)
         window.run()
 
-    def clicked(self, sender):
-        # When recording, clicking the status menu item stops the recording
+    @rumps.clicked
+    def on_click(self, sender):
         if self.status_app.is_recording:
             self.toggle_recording()
-            return True  # Prevent menu from showing
-        # Only show menu when not recording
-        return super().clicked(sender)
-
-    @rumps.clicked('Quit')
-    def quit_app(self, sender):
-        rumps.quit_application()
+            return True
+        return False
 
 if __name__ == "__main__":
     app = AutoMouseApp()
