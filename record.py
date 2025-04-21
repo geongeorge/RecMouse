@@ -80,6 +80,21 @@ class MouseRecorder:
             else:
                 # Keep removing move events until we find click events
                 self.recording.pop()
+        
+        # Also remove the last 2 seconds of events
+        self.remove_last_seconds(2)
+
+    def remove_last_seconds(self, seconds):
+        if not self.recording:
+            return
+            
+        # Get the time of the last event
+        last_time = self.recording[-1]['time']
+        cutoff_time = last_time - seconds
+        
+        # Remove all events in the last 'seconds' seconds
+        while self.recording and self.recording[-1]['time'] > cutoff_time:
+            self.recording.pop()
 
     def start_recording(self):
         self.recording = []
